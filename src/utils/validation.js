@@ -90,6 +90,19 @@ export function validateConfig(state) {
 }
 
 export function exportToJSON(state) {
+  // Build block_groups output from blockGroups state
+  const blockGroupsOut = {};
+  for (const [divId, groups] of Object.entries(state.blockGroups || {})) {
+    if (groups.length > 0) {
+      blockGroupsOut[divId] = groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        grade: g.grade,
+        subjects: g.subjects,
+      }));
+    }
+  }
+
   return {
     school_name: state.schoolName,
     divisions: state.divisions.map((d) => ({
@@ -100,9 +113,11 @@ export function exportToJSON(state) {
       section_model: d.sectionModel,
     })),
     subjects: state.subjects,
+    block_groups: blockGroupsOut,
     sections: state.sections.map((s) => {
       const out = { id: s.id, grade: s.grade, division: s.division };
       if (s.subject) out.subject = s.subject;
+      if (s.blockGroup) out.block_group = s.blockGroup;
       return out;
     }),
     master_schedule: Object.fromEntries(
@@ -135,6 +150,17 @@ export function exportToJSON(state) {
 }
 
 export function importFromJSON(json) {
+  // Rebuild blockGroups from block_groups in JSON
+  const blockGroups = {};
+  for (const [divId, groups] of Object.entries(json.block_groups || {})) {
+    blockGroups[divId] = groups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      grade: g.grade,
+      subjects: g.subjects || [],
+    }));
+  }
+
   return {
     schoolName: json.school_name || "",
     divisions: (json.divisions || []).map((d) => ({
@@ -145,11 +171,13 @@ export function importFromJSON(json) {
       sectionModel: d.section_model || "homeroom",
     })),
     subjects: json.subjects || {},
+    blockGroups,
     sections: (json.sections || []).map((s) => ({
       id: s.id,
       grade: s.grade,
       division: s.division,
       subject: s.subject || null,
+      blockGroup: s.block_group || null,
     })),
     masterSchedule: Object.fromEntries(
       Object.entries(json.master_schedule || {}).map(([divId, sched]) => [

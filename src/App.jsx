@@ -22,6 +22,9 @@ const initialState = {
   schoolName: "",
   divisions: [],
   subjects: {},
+  // blockGroups: { [divId]: [{ id, name, grade, subjects: [] }] }
+  // Used for subject-based divisions (MS). Each group = a cohort of students.
+  blockGroups: {},
   sections: [],
   masterSchedule: {},
   teachers: [],
@@ -46,6 +49,7 @@ function reducer(state, action) {
         ...state,
         divisions: [...state.divisions, div],
         subjects: { ...state.subjects, [div.id]: [] },
+        blockGroups: { ...state.blockGroups, [div.id]: [] },
         masterSchedule: {
           ...state.masterSchedule,
           [div.id]: { default: [], friday: null },
@@ -60,6 +64,7 @@ function reducer(state, action) {
 
       let newSubjects = { ...state.subjects };
       let newSchedule = { ...state.masterSchedule };
+      let newBlockGroups = { ...state.blockGroups };
       let newSections = state.sections;
       let newTeachers = state.teachers;
       let newReqs = state.subjectRequirements;
@@ -69,6 +74,8 @@ function reducer(state, action) {
         delete newSubjects[oldDiv.id];
         newSchedule[division.id] = newSchedule[oldDiv.id] || { default: [], friday: null };
         delete newSchedule[oldDiv.id];
+        newBlockGroups[division.id] = newBlockGroups[oldDiv.id] || [];
+        delete newBlockGroups[oldDiv.id];
         newSections = state.sections.map((s) =>
           s.division === oldDiv.id ? { ...s, division: division.id } : s
         );
@@ -84,6 +91,7 @@ function reducer(state, action) {
         ...state,
         divisions: newDivisions,
         subjects: newSubjects,
+        blockGroups: newBlockGroups,
         masterSchedule: newSchedule,
         sections: newSections,
         teachers: newTeachers,
@@ -96,10 +104,13 @@ function reducer(state, action) {
       delete newSubjects[divId];
       const newSchedule = { ...state.masterSchedule };
       delete newSchedule[divId];
+      const newBlockGroups = { ...state.blockGroups };
+      delete newBlockGroups[divId];
       return {
         ...state,
         divisions: state.divisions.filter((d) => d.id !== divId),
         subjects: newSubjects,
+        blockGroups: newBlockGroups,
         masterSchedule: newSchedule,
         sections: state.sections.filter((s) => s.division !== divId),
         teachers: state.teachers.filter((t) => t.division !== divId),
@@ -124,6 +135,11 @@ function reducer(state, action) {
     }
     case "REMOVE_SUBJECT": {
       const { divisionId, subject } = action.payload;
+      // Remove subject from all block groups in this division
+      const updatedGroups = (state.blockGroups[divisionId] || []).map((g) => ({
+        ...g,
+        subjects: g.subjects.filter((s) => s !== subject),
+      }));
       return {
         ...state,
         subjects: {
@@ -132,6 +148,7 @@ function reducer(state, action) {
             (s) => s !== subject
           ),
         },
+        blockGroups: { ...state.blockGroups, [divisionId]: updatedGroups },
         sections: state.sections.filter(
           (s) => !(s.division === divisionId && s.subject === subject)
         ),
@@ -141,6 +158,59 @@ function reducer(state, action) {
         subjectRequirements: state.subjectRequirements.filter(
           (r) => !(r.division === divisionId && r.subject === subject)
         ),
+      };
+    }
+
+    // Block Groups (subject-based divisions only)
+    case "ADD_BLOCK_GROUP": {
+      const { divisionId, group } = action.payload;
+      const existing = state.blockGroups[divisionId] || [];
+      return {
+        ...state,
+        blockGroups: {
+          ...state.blockGroups,
+          [divisionId]: [...existing, group],
+        },
+      };
+    }
+    case "UPDATE_BLOCK_GROUP": {
+      const { divisionId, groupId, updates } = action.payload;
+      const groups = (state.blockGroups[divisionId] || []).map((g) =>
+        g.id === groupId ? { ...g, ...updates } : g
+      );
+      // Recompute sections for this division based on updated block groups
+      const otherSections = state.sections.filter((s) => s.division !== divisionId);
+      const newSections = groups.flatMap((g) =>
+        g.subjects.map((subj) => ({
+          id: `${g.grade}-${g.name}-${subj}`,
+          grade: g.grade,
+          division: divisionId,
+          subject: subj,
+          blockGroup: g.name,
+        }))
+      );
+      return {
+        ...state,
+        blockGroups: { ...state.blockGroups, [divisionId]: groups },
+        sections: [...otherSections, ...newSections],
+      };
+    }
+    case "REMOVE_BLOCK_GROUP": {
+      const { divisionId, groupId } = action.payload;
+      const group = (state.blockGroups[divisionId] || []).find((g) => g.id === groupId);
+      const groups = (state.blockGroups[divisionId] || []).filter((g) => g.id !== groupId);
+      // Remove sections belonging to this group
+      const removedSectionIds = group
+        ? group.subjects.map((subj) => `${group.grade}-${group.name}-${subj}`)
+        : [];
+      return {
+        ...state,
+        blockGroups: { ...state.blockGroups, [divisionId]: groups },
+        sections: state.sections.filter((s) => !removedSectionIds.includes(s.id)),
+        teachers: state.teachers.map((t) => ({
+          ...t,
+          sectionIds: t.sectionIds.filter((id) => !removedSectionIds.includes(id)),
+        })),
       };
     }
 
@@ -196,7 +266,12 @@ function reducer(state, action) {
 
     // Import full state
     case "IMPORT_STATE":
-      return { ...action.payload, activeTab: state.activeTab, activeDivision: "all" };
+      return {
+        ...action.payload,
+        blockGroups: action.payload.blockGroups || {},
+        activeTab: state.activeTab,
+        activeDivision: "all",
+      };
 
     default:
       return state;
