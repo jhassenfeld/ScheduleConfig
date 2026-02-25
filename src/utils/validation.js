@@ -86,6 +86,30 @@ export function validateConfig(state) {
     }
   }
 
+  // Check block group slot totals (subject-based divisions)
+  for (const div of state.divisions) {
+    if (div.sectionModel !== "subject-based") continue;
+    const groups = state.blockGroups[div.id] || [];
+    for (const grade of div.grades) {
+      const gradeGroups = groups.filter((g) => g.grade === grade);
+      if (gradeGroups.length === 0) continue;
+      const target = gradeGroups.length * 5;
+      for (const group of gradeGroups) {
+        const total = group.subjects.reduce(
+          (sum, e) => sum + (e.frequency || 0),
+          0
+        );
+        if (total !== target) {
+          warnings.push({
+            type: "warning",
+            tab: "Sections",
+            message: `Block group "${group.name}" in Grade ${grade.toUpperCase()} has ${total}/${target} slots filled`,
+          });
+        }
+      }
+    }
+  }
+
   return warnings;
 }
 
@@ -98,7 +122,10 @@ export function exportToJSON(state) {
         id: g.id,
         name: g.name,
         grade: g.grade,
-        subjects: g.subjects,
+        subjects: g.subjects.map((e) => ({
+          subject: e.subject,
+          frequency: e.frequency,
+        })),
       }));
     }
   }
@@ -157,7 +184,11 @@ export function importFromJSON(json) {
       id: g.id,
       name: g.name,
       grade: g.grade,
-      subjects: g.subjects || [],
+      subjects: (g.subjects || []).map((entry) =>
+        typeof entry === "string"
+          ? { subject: entry, frequency: 0 }
+          : { subject: entry.subject, frequency: entry.frequency || 0 }
+      ),
     }));
   }
 

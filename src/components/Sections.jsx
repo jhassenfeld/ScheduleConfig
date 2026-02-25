@@ -13,6 +13,14 @@ function BlockGroupEditor({ div, state, dispatch }) {
   const divSubjects = state.subjects[div.id] || [];
   const groups = state.blockGroups[div.id] || [];
 
+  // Get frequency for a subject from the SubjectRequirements tab
+  const getDefaultFrequency = (subject) => {
+    const req = state.subjectRequirements.find(
+      (r) => r.division === div.id && r.subject === subject
+    );
+    return req ? req.blocksPerWeek : 0;
+  };
+
   const handleAddGroup = () => {
     const name = newGroupName.trim();
     if (!name || !selectedGrade) return;
@@ -32,12 +40,32 @@ function BlockGroupEditor({ div, state, dispatch }) {
   const toggleSubject = (groupId, subject) => {
     const group = groups.find((g) => g.id === groupId);
     if (!group) return;
-    const subjects = group.subjects.includes(subject)
-      ? group.subjects.filter((s) => s !== subject)
-      : [...group.subjects, subject];
+
+    const existing = group.subjects.find((e) => e.subject === subject);
+    let newSubjects;
+    if (existing) {
+      newSubjects = group.subjects.filter((e) => e.subject !== subject);
+    } else {
+      newSubjects = [
+        ...group.subjects,
+        { subject, frequency: getDefaultFrequency(subject) },
+      ];
+    }
     dispatch({
       type: "UPDATE_BLOCK_GROUP",
-      payload: { divisionId: div.id, groupId, updates: { subjects } },
+      payload: { divisionId: div.id, groupId, updates: { subjects: newSubjects } },
+    });
+  };
+
+  const updateFrequency = (groupId, subject, frequency) => {
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const newSubjects = group.subjects.map((e) =>
+      e.subject === subject ? { ...e, frequency } : e
+    );
+    dispatch({
+      type: "UPDATE_BLOCK_GROUP",
+      payload: { divisionId: div.id, groupId, updates: { subjects: newSubjects } },
     });
   };
 
@@ -68,7 +96,7 @@ function BlockGroupEditor({ div, state, dispatch }) {
         <input
           type="text"
           className="form-input"
-          placeholder='Block group name (e.g., "Purple", "Blue")'
+          placeholder='Block group name (e.g., "Purple")'
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAddGroup()}
@@ -83,6 +111,10 @@ function BlockGroupEditor({ div, state, dispatch }) {
       {div.grades.map((grade) => {
         const gradeGroups = groups.filter((g) => g.grade === grade);
         if (gradeGroups.length === 0) return null;
+
+        const numGroups = gradeGroups.length;
+        const slotsPerGroup = numGroups * 5;
+
         return (
           <div key={grade} style={{ marginBottom: 20 }}>
             <div
@@ -92,105 +124,204 @@ function BlockGroupEditor({ div, state, dispatch }) {
                 color: "var(--text-secondary)",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
-                marginBottom: 8,
+                marginBottom: 4,
               }}
             >
               Grade {grade.toUpperCase()}
             </div>
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "var(--text-secondary)",
+                marginBottom: 10,
+              }}
+            >
+              {numGroups} block group{numGroups !== 1 ? "s" : ""} — each block
+              needs {slotsPerGroup} total slots ({numGroups} groups × 5 days)
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-              {gradeGroups.map((group) => (
-                <div
-                  key={group.id}
-                  className="card"
-                  style={{ minWidth: 180, flex: "0 0 auto" }}
-                >
-                  <div className="card-header" style={{ marginBottom: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                      {group.name}
-                    </span>
-                    <button
-                      className="btn-icon"
-                      title="Remove block group"
-                      onClick={() =>
-                        dispatch({
-                          type: "REMOVE_BLOCK_GROUP",
-                          payload: { divisionId: div.id, groupId: group.id },
-                        })
-                      }
-                    >
-                      ✕
-                    </button>
-                  </div>
+              {gradeGroups.map((group) => {
+                const total = group.subjects.reduce(
+                  (sum, e) => sum + (e.frequency || 0),
+                  0
+                );
+                const target = numGroups * 5;
+                const isValid = total === target;
+                const isOver = total > target;
+
+                return (
                   <div
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "var(--text-secondary)",
-                      marginBottom: 6,
-                    }}
+                    key={group.id}
+                    className="card"
+                    style={{ minWidth: 220, flex: "0 0 auto" }}
                   >
-                    Subjects in this block:
-                  </div>
-                  {divSubjects.length === 0 ? (
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-                      No subjects defined yet.
-                    </span>
-                  ) : (
-                    <div
-                      style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                    >
-                      {divSubjects.map((subject) => (
-                        <label
-                          key={subject}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            fontSize: "0.85rem",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={group.subjects.includes(subject)}
-                            onChange={() => toggleSubject(group.id, subject)}
-                          />
-                          {subject}
-                        </label>
-                      ))}
+                    <div className="card-header" style={{ marginBottom: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>
+                        {group.name}
+                      </span>
+                      <button
+                        className="btn-icon"
+                        title="Remove block group"
+                        onClick={() =>
+                          dispatch({
+                            type: "REMOVE_BLOCK_GROUP",
+                            payload: { divisionId: div.id, groupId: group.id },
+                          })
+                        }
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )}
-                  {group.subjects.length > 0 && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        paddingTop: 8,
-                        borderTop: "1px solid var(--border)",
-                        fontSize: "0.75rem",
-                        color: "var(--text-secondary)",
-                      }}
-                    >
-                      Generates:{" "}
-                      {group.subjects.map((s) => (
-                        <span
-                          key={s}
-                          style={{
-                            display: "inline-block",
-                            background: "#F3F4F6",
-                            border: "1px solid var(--border)",
-                            borderRadius: 4,
-                            padding: "1px 5px",
-                            marginRight: 3,
-                            fontFamily: "monospace",
-                            fontSize: "0.72rem",
-                          }}
-                        >
-                          {grade}-{group.name}-{s}
+
+                    {/* Subject checklist with frequency inputs */}
+                    {divSubjects.length === 0 ? (
+                      <span
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        No subjects defined yet.
+                      </span>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                        }}
+                      >
+                        {divSubjects.map((subject) => {
+                          const entry = group.subjects.find(
+                            (e) => e.subject === subject
+                          );
+                          const isChecked = !!entry;
+                          return (
+                            <div
+                              key={subject}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <label
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6,
+                                  fontSize: "0.85rem",
+                                  cursor: "pointer",
+                                  flex: 1,
+                                  minWidth: 0,
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() =>
+                                    toggleSubject(group.id, subject)
+                                  }
+                                />
+                                {subject}
+                              </label>
+                              {isChecked && (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={10}
+                                  value={entry.frequency}
+                                  onChange={(e) =>
+                                    updateFrequency(
+                                      group.id,
+                                      subject,
+                                      parseInt(e.target.value) || 0
+                                    )
+                                  }
+                                  title={`${subject}: times per week`}
+                                  style={{
+                                    width: 48,
+                                    padding: "2px 6px",
+                                    border: "1px solid var(--border)",
+                                    borderRadius: 4,
+                                    fontSize: "0.8rem",
+                                    textAlign: "center",
+                                  }}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Slot count total */}
+                    {group.subjects.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          paddingTop: 8,
+                          borderTop: "1px solid var(--border)",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                          Total slots:
                         </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                        <span
+                          style={{
+                            fontSize: "0.85rem",
+                            fontWeight: 700,
+                            color: isValid
+                              ? "var(--success)"
+                              : isOver
+                              ? "var(--error-text)"
+                              : "var(--warning)",
+                          }}
+                        >
+                          {total} / {target}
+                          {isValid ? " ✓" : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Generated section IDs */}
+                    {group.subjects.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          paddingTop: 8,
+                          borderTop: "1px solid var(--border)",
+                          fontSize: "0.75rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        Sections:{" "}
+                        {group.subjects.map((e) => (
+                          <span
+                            key={e.subject}
+                            style={{
+                              display: "inline-block",
+                              background: "#F3F4F6",
+                              border: "1px solid var(--border)",
+                              borderRadius: 4,
+                              padding: "1px 5px",
+                              marginRight: 3,
+                              marginBottom: 2,
+                              fontFamily: "monospace",
+                              fontSize: "0.72rem",
+                            }}
+                          >
+                            {grade}-{group.name}-{e.subject}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         );
@@ -202,7 +333,7 @@ function BlockGroupEditor({ div, state, dispatch }) {
         </div>
       )}
 
-      {/* Generated sections summary */}
+      {/* All generated sections summary */}
       {(() => {
         const divSections = state.sections.filter((s) => s.division === div.id);
         if (divSections.length === 0) return null;
@@ -216,7 +347,7 @@ function BlockGroupEditor({ div, state, dispatch }) {
                 color: "var(--text-secondary)",
               }}
             >
-              Generated Sections ({divSections.length})
+              All Generated Sections ({divSections.length})
             </div>
             <div className="tag-list">
               {divSections.map((s) => (
@@ -357,8 +488,9 @@ export default function Sections({ state, dispatch, visibleDivisions }) {
         Define class sections for each division.{" "}
         <strong>Homeroom-based</strong> divisions use simple grade + label
         sections. <strong>Subject-based</strong> divisions use{" "}
-        <em>block groups</em> — named cohorts of students that share a set of
-        subjects together (e.g., the "Purple" block has Hebrew, JS, and Science).
+        <em>block groups</em> — named cohorts of students (e.g., "Purple") with
+        subjects and per-subject frequencies. Frequencies auto-populate from the
+        Subject Frequencies tab.
       </p>
 
       {visibleDivisions.map((div) => {
@@ -395,7 +527,11 @@ export default function Sections({ state, dispatch, visibleDivisions }) {
             ) : isSubjectBased ? (
               <BlockGroupEditor div={div} state={state} dispatch={dispatch} />
             ) : (
-              <HomeroomSectionEditor div={div} state={state} dispatch={dispatch} />
+              <HomeroomSectionEditor
+                div={div}
+                state={state}
+                dispatch={dispatch}
+              />
             )}
           </div>
         );

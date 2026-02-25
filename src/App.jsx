@@ -10,11 +10,11 @@ import "./App.css";
 
 const VIEW_TABS = [
   { id: "school-info", label: "School Info" },
-  { id: "sections", label: "Sections" },
   { id: "subjects", label: "Subjects" },
+  { id: "frequencies", label: "Subject Frequencies" },
+  { id: "sections", label: "Sections" },
   { id: "schedule", label: "Master Schedule" },
   { id: "teachers", label: "Teachers" },
-  { id: "frequencies", label: "Subject Frequencies" },
   { id: "export", label: "Export / Import" },
 ];
 
@@ -136,9 +136,10 @@ function reducer(state, action) {
     case "REMOVE_SUBJECT": {
       const { divisionId, subject } = action.payload;
       // Remove subject from all block groups in this division
+      // subjects is now [{ subject, frequency }]
       const updatedGroups = (state.blockGroups[divisionId] || []).map((g) => ({
         ...g,
-        subjects: g.subjects.filter((s) => s !== subject),
+        subjects: g.subjects.filter((entry) => entry.subject !== subject),
       }));
       return {
         ...state,
@@ -179,13 +180,14 @@ function reducer(state, action) {
         g.id === groupId ? { ...g, ...updates } : g
       );
       // Recompute sections for this division based on updated block groups
+      // subjects is now [{ subject, frequency }]
       const otherSections = state.sections.filter((s) => s.division !== divisionId);
       const newSections = groups.flatMap((g) =>
-        g.subjects.map((subj) => ({
-          id: `${g.grade}-${g.name}-${subj}`,
+        g.subjects.map((entry) => ({
+          id: `${g.grade}-${g.name}-${entry.subject}`,
           grade: g.grade,
           division: divisionId,
-          subject: subj,
+          subject: entry.subject,
           blockGroup: g.name,
         }))
       );
@@ -201,7 +203,7 @@ function reducer(state, action) {
       const groups = (state.blockGroups[divisionId] || []).filter((g) => g.id !== groupId);
       // Remove sections belonging to this group
       const removedSectionIds = group
-        ? group.subjects.map((subj) => `${group.grade}-${group.name}-${subj}`)
+        ? group.subjects.map((entry) => `${group.grade}-${group.name}-${entry.subject}`)
         : [];
       return {
         ...state,
