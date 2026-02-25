@@ -3,6 +3,52 @@ import { useState } from "react";
 export default function Teachers({ state, dispatch, visibleDivisions }) {
   const [formState, setFormState] = useState({});
   const [expanded, setExpanded] = useState({});
+  // sortConfig: { [divId]: { key: "name"|"subject"|"sections", dir: "asc"|"desc" } }
+  const [sortConfig, setSortConfig] = useState({});
+
+  const handleSort = (divId, key) => {
+    const current = sortConfig[divId];
+    let dir = "asc";
+    if (current && current.key === key) {
+      dir = current.dir === "asc" ? "desc" : "asc";
+    }
+    setSortConfig({ ...sortConfig, [divId]: { key, dir } });
+  };
+
+  const sortIndicator = (divId, key) => {
+    const current = sortConfig[divId];
+    if (!current || current.key !== key) return " ↕";
+    return current.dir === "asc" ? " ↑" : " ↓";
+  };
+
+  const sortTeachers = (divId, teachers) => {
+    const config = sortConfig[divId];
+    if (!config) return teachers;
+    const sorted = [...teachers];
+    sorted.sort((a, b) => {
+      let valA, valB;
+      switch (config.key) {
+        case "name":
+          valA = a.name.toLowerCase();
+          valB = b.name.toLowerCase();
+          break;
+        case "subject":
+          valA = a.subject.toLowerCase();
+          valB = b.subject.toLowerCase();
+          break;
+        case "sections":
+          valA = a.sectionIds.length;
+          valB = b.sectionIds.length;
+          break;
+        default:
+          return 0;
+      }
+      if (valA < valB) return config.dir === "asc" ? -1 : 1;
+      if (valA > valB) return config.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  };
 
   const getForm = (divId) =>
     formState[divId] || { name: "", subject: "" };
@@ -124,9 +170,10 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
       {visibleDivisions.map((div) => {
         const form = getForm(div.id);
         const divSubjects = state.subjects[div.id] || [];
-        const divTeachers = state.teachers
+        const divTeachersUnsorted = state.teachers
           .map((t, i) => ({ ...t, _index: i }))
           .filter((t) => t.divisions.includes(div.id));
+        const divTeachers = sortTeachers(div.id, divTeachersUnsorted);
         const divSections = state.sections.filter((s) => s.division === div.id);
 
         return (
@@ -178,10 +225,25 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
               <table className="config-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Subject</th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      onClick={() => handleSort(div.id, "name")}
+                    >
+                      Name{sortIndicator(div.id, "name")}
+                    </th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      onClick={() => handleSort(div.id, "subject")}
+                    >
+                      Subject{sortIndicator(div.id, "subject")}
+                    </th>
                     <th>Divisions</th>
-                    <th>Sections</th>
+                    <th
+                      style={{ cursor: "pointer", userSelect: "none" }}
+                      onClick={() => handleSort(div.id, "sections")}
+                    >
+                      Sections{sortIndicator(div.id, "sections")}
+                    </th>
                     <th style={{ width: 60 }}></th>
                   </tr>
                 </thead>
