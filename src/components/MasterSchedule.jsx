@@ -173,10 +173,51 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
         const fridayBlocks = sched.friday;
         const hasFriday = fridayEnabled[div.id] || !!fridayBlocks;
 
+        const otherDivs = visibleDivisions.filter(
+          (d) =>
+            d.id !== div.id &&
+            (state.masterSchedule[d.id]?.default || []).length > 0
+        );
+
+        const copyFrom = (sourceId) => {
+          const source = state.masterSchedule[sourceId];
+          if (!source) return;
+          const copied = {
+            default: (source.default || []).map((b) => ({ ...b })),
+            friday: source.friday
+              ? source.friday.map((b) => ({ ...b }))
+              : null,
+          };
+          dispatch({
+            type: "SET_SCHEDULE",
+            payload: { divisionId: div.id, schedule: copied },
+          });
+          if (copied.friday) {
+            setFridayEnabled({ ...fridayEnabled, [div.id]: true });
+          }
+        };
+
         return (
           <div key={div.id} className="division-card">
             <div className="division-card-header">
               <h3>{div.name}</h3>
+              {otherDivs.length > 0 && (
+                <select
+                  className="form-select"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) copyFrom(e.target.value);
+                  }}
+                  style={{ fontSize: "0.8rem", width: "auto" }}
+                >
+                  <option value="">Copy from...</option>
+                  {otherDivs.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="form-row" style={{ marginBottom: 12 }}>
