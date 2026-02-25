@@ -21,6 +21,28 @@ function BlockGroupEditor({ div, state, dispatch }) {
     return req ? req.blocksPerWeek : 0;
   };
 
+  const copyGroupsFromGrade = (sourceGrade, targetGrade) => {
+    const sourceGroups = groups.filter((g) => g.grade === sourceGrade);
+    if (sourceGroups.length === 0) return;
+    for (const src of sourceGroups) {
+      const id = generateGroupId(targetGrade, src.name);
+      if (groups.some((g) => g.id === id)) continue;
+      dispatch({
+        type: "ADD_BLOCK_GROUP",
+        payload: {
+          divisionId: div.id,
+          group: {
+            id,
+            name: src.name,
+            grade: targetGrade,
+            parallelSections: src.parallelSections || 3,
+            subjects: src.subjects.map((e) => ({ ...e })),
+          },
+        },
+      });
+    }
+  };
+
   const handleAddGroup = () => {
     const name = newGroupName.trim();
     if (!name || !selectedGrade) return;
@@ -112,20 +134,50 @@ function BlockGroupEditor({ div, state, dispatch }) {
         const gradeGroups = groups.filter((g) => g.grade === grade);
         if (gradeGroups.length === 0) return null;
 
+        // Other grades that have block groups defined (for "copy from")
+        const otherGradesWithGroups = div.grades.filter(
+          (g) => g !== grade && groups.some((bg) => bg.grade === g)
+        );
+
         return (
           <div key={grade} style={{ marginBottom: 24 }}>
             <div
               style={{
-                fontSize: "0.8rem",
-                fontWeight: 700,
-                color: "var(--text-secondary)",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
                 marginBottom: 8,
               }}
             >
-              Grade {grade.toUpperCase()} — {gradeGroups.length} block group
-              {gradeGroups.length !== 1 ? "s" : ""}
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  fontWeight: 700,
+                  color: "var(--text-secondary)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Grade {grade.toUpperCase()} — {gradeGroups.length} block group
+                {gradeGroups.length !== 1 ? "s" : ""}
+              </div>
+              {otherGradesWithGroups.length > 0 && (
+                <select
+                  className="form-select"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) copyGroupsFromGrade(e.target.value, grade);
+                  }}
+                  style={{ fontSize: "0.75rem", width: "auto", padding: "2px 6px" }}
+                >
+                  <option value="">Copy from...</option>
+                  {otherGradesWithGroups.map((g) => (
+                    <option key={g} value={g}>
+                      Grade {g.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div style={{ overflowX: "auto" }}>
