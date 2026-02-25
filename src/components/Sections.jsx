@@ -31,7 +31,7 @@ function BlockGroupEditor({ div, state, dispatch }) {
       type: "ADD_BLOCK_GROUP",
       payload: {
         divisionId: div.id,
-        group: { id, name, grade: selectedGrade, subjects: [] },
+        group: { id, name, grade: selectedGrade, parallelSections: 3, subjects: [] },
       },
     });
     setNewGroupName("");
@@ -113,7 +113,6 @@ function BlockGroupEditor({ div, state, dispatch }) {
         if (gradeGroups.length === 0) return null;
 
         const numGroups = gradeGroups.length;
-        const slotsPerGroup = numGroups * 5;
 
         return (
           <div key={grade} style={{ marginBottom: 20 }}>
@@ -136,16 +135,16 @@ function BlockGroupEditor({ div, state, dispatch }) {
                 marginBottom: 10,
               }}
             >
-              {numGroups} block group{numGroups !== 1 ? "s" : ""} — each block
-              needs {slotsPerGroup} total slots ({numGroups} groups × 5 days)
+              {numGroups} block group{numGroups !== 1 ? "s" : ""}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
               {gradeGroups.map((group) => {
+                const ps = group.parallelSections || 3;
                 const total = group.subjects.reduce(
                   (sum, e) => sum + (e.frequency || 0),
                   0
                 );
-                const target = numGroups * 5;
+                const target = ps * 5;
                 const isValid = total === target;
                 const isOver = total > target;
 
@@ -153,7 +152,7 @@ function BlockGroupEditor({ div, state, dispatch }) {
                   <div
                     key={group.id}
                     className="card"
-                    style={{ minWidth: 220, flex: "0 0 auto" }}
+                    style={{ minWidth: 240, flex: "0 0 auto" }}
                   >
                     <div className="card-header" style={{ marginBottom: 8 }}>
                       <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>
@@ -171,6 +170,61 @@ function BlockGroupEditor({ div, state, dispatch }) {
                       >
                         ✕
                       </button>
+                    </div>
+
+                    {/* Parallel sections input */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 10,
+                        paddingBottom: 8,
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <label
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        Parallel sections:
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={ps}
+                        onChange={(e) =>
+                          dispatch({
+                            type: "UPDATE_BLOCK_GROUP",
+                            payload: {
+                              divisionId: div.id,
+                              groupId: group.id,
+                              updates: { parallelSections: parseInt(e.target.value) || 1 },
+                            },
+                          })
+                        }
+                        title="Number of simultaneous sections in this block"
+                        style={{
+                          width: 48,
+                          padding: "2px 6px",
+                          border: "1px solid var(--border)",
+                          borderRadius: 4,
+                          fontSize: "0.8rem",
+                          textAlign: "center",
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: "0.72rem",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        → {target} slots ({ps} × 5 days)
+                      </span>
                     </div>
 
                     {/* Subject checklist with frequency inputs */}

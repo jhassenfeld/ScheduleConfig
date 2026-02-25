@@ -90,22 +90,19 @@ export function validateConfig(state) {
   for (const div of state.divisions) {
     if (div.sectionModel !== "subject-based") continue;
     const groups = state.blockGroups[div.id] || [];
-    for (const grade of div.grades) {
-      const gradeGroups = groups.filter((g) => g.grade === grade);
-      if (gradeGroups.length === 0) continue;
-      const target = gradeGroups.length * 5;
-      for (const group of gradeGroups) {
-        const total = group.subjects.reduce(
-          (sum, e) => sum + (e.frequency || 0),
-          0
-        );
-        if (total !== target) {
-          warnings.push({
-            type: "warning",
-            tab: "Sections",
-            message: `Block group "${group.name}" in Grade ${grade.toUpperCase()} has ${total}/${target} slots filled`,
-          });
-        }
+    for (const group of groups) {
+      const ps = group.parallelSections || 3;
+      const target = ps * 5;
+      const total = group.subjects.reduce(
+        (sum, e) => sum + (e.frequency || 0),
+        0
+      );
+      if (total !== target) {
+        warnings.push({
+          type: "warning",
+          tab: "Sections",
+          message: `Block group "${group.name}" in Grade ${group.grade.toUpperCase()} has ${total}/${target} slots (${ps} parallel × 5 days)`,
+        });
       }
     }
   }
@@ -122,6 +119,7 @@ export function exportToJSON(state) {
         id: g.id,
         name: g.name,
         grade: g.grade,
+        parallel_sections: g.parallelSections || 3,
         subjects: g.subjects.map((e) => ({
           subject: e.subject,
           frequency: e.frequency,
@@ -184,6 +182,7 @@ export function importFromJSON(json) {
       id: g.id,
       name: g.name,
       grade: g.grade,
+      parallelSections: g.parallel_sections || 3,
       subjects: (g.subjects || []).map((entry) =>
         typeof entry === "string"
           ? { subject: entry, frequency: 0 }
