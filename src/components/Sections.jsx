@@ -107,15 +107,13 @@ function BlockGroupEditor({ div, state, dispatch }) {
         </button>
       </div>
 
-      {/* Groups grouped by grade */}
+      {/* Groups as table per grade */}
       {div.grades.map((grade) => {
         const gradeGroups = groups.filter((g) => g.grade === grade);
         if (gradeGroups.length === 0) return null;
 
-        const numGroups = gradeGroups.length;
-
         return (
-          <div key={grade} style={{ marginBottom: 20 }}>
+          <div key={grade} style={{ marginBottom: 24 }}>
             <div
               style={{
                 fontSize: "0.8rem",
@@ -123,151 +121,91 @@ function BlockGroupEditor({ div, state, dispatch }) {
                 color: "var(--text-secondary)",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
-                marginBottom: 4,
+                marginBottom: 8,
               }}
             >
-              Grade {grade.toUpperCase()}
+              Grade {grade.toUpperCase()} — {gradeGroups.length} block group
+              {gradeGroups.length !== 1 ? "s" : ""}
             </div>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "var(--text-secondary)",
-                marginBottom: 10,
-              }}
-            >
-              {numGroups} block group{numGroups !== 1 ? "s" : ""}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-              {gradeGroups.map((group) => {
-                const ps = group.parallelSections || 3;
-                const total = group.subjects.reduce(
-                  (sum, e) => sum + (e.frequency || 0),
-                  0
-                );
-                const target = ps * 5;
-                const isValid = total === target;
-                const isOver = total > target;
 
-                return (
-                  <div
-                    key={group.id}
-                    className="card"
-                    style={{ minWidth: 240, flex: "0 0 auto" }}
-                  >
-                    <div className="card-header" style={{ marginBottom: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-                        {group.name}
-                      </span>
-                      <button
-                        className="btn-icon"
-                        title="Remove block group"
-                        onClick={() =>
-                          dispatch({
-                            type: "REMOVE_BLOCK_GROUP",
-                            payload: { divisionId: div.id, groupId: group.id },
-                          })
-                        }
+            <div style={{ overflowX: "auto" }}>
+              <table className="config-table" style={{ fontSize: "0.82rem" }}>
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: 100 }}>Block</th>
+                    <th style={{ width: 60, textAlign: "center" }}>∥</th>
+                    {divSubjects.map((subject) => (
+                      <th
+                        key={subject}
+                        style={{ textAlign: "center", minWidth: 52 }}
                       >
-                        ✕
-                      </button>
-                    </div>
+                        {subject}
+                      </th>
+                    ))}
+                    <th style={{ textAlign: "center", minWidth: 70 }}>Slots</th>
+                    <th style={{ width: 40 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gradeGroups.map((group) => {
+                    const ps = group.parallelSections || 3;
+                    const total = group.subjects.reduce(
+                      (sum, e) => sum + (e.frequency || 0),
+                      0
+                    );
+                    const target = ps * 5;
+                    const isValid = total === target;
+                    const isOver = total > target;
 
-                    {/* Parallel sections input */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        marginBottom: 10,
-                        paddingBottom: 8,
-                        borderBottom: "1px solid var(--border)",
-                      }}
-                    >
-                      <label
-                        style={{
-                          fontSize: "0.8rem",
-                          fontWeight: 600,
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        Parallel sections:
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={10}
-                        value={ps}
-                        onChange={(e) =>
-                          dispatch({
-                            type: "UPDATE_BLOCK_GROUP",
-                            payload: {
-                              divisionId: div.id,
-                              groupId: group.id,
-                              updates: { parallelSections: parseInt(e.target.value) || 1 },
-                            },
-                          })
-                        }
-                        title="Number of simultaneous sections in this block"
-                        style={{
-                          width: 48,
-                          padding: "2px 6px",
-                          border: "1px solid var(--border)",
-                          borderRadius: 4,
-                          fontSize: "0.8rem",
-                          textAlign: "center",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: "0.72rem",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        → {target} slots ({ps} × 5 days)
-                      </span>
-                    </div>
-
-                    {/* Subject checklist with frequency inputs */}
-                    {divSubjects.length === 0 ? (
-                      <span
-                        style={{
-                          fontSize: "0.8rem",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        No subjects defined yet.
-                      </span>
-                    ) : (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                        }}
-                      >
+                    return (
+                      <tr key={group.id}>
+                        <td style={{ fontWeight: 700 }}>{group.name}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={ps}
+                            onChange={(e) =>
+                              dispatch({
+                                type: "UPDATE_BLOCK_GROUP",
+                                payload: {
+                                  divisionId: div.id,
+                                  groupId: group.id,
+                                  updates: {
+                                    parallelSections:
+                                      parseInt(e.target.value) || 1,
+                                  },
+                                },
+                              })
+                            }
+                            title="Parallel sections"
+                            style={{
+                              width: 40,
+                              padding: "2px 4px",
+                              border: "1px solid var(--border)",
+                              borderRadius: 4,
+                              fontSize: "0.8rem",
+                              textAlign: "center",
+                            }}
+                          />
+                        </td>
                         {divSubjects.map((subject) => {
                           const entry = group.subjects.find(
                             (e) => e.subject === subject
                           );
                           const isChecked = !!entry;
                           return (
-                            <div
+                            <td
                               key={subject}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6,
-                              }}
+                              style={{ textAlign: "center", padding: "4px 2px" }}
                             >
-                              <label
+                              <div
                                 style={{
                                   display: "flex",
+                                  flexDirection: "column",
                                   alignItems: "center",
-                                  gap: 6,
-                                  fontSize: "0.85rem",
-                                  cursor: "pointer",
-                                  flex: 1,
-                                  minWidth: 0,
+                                  gap: 2,
                                 }}
                               >
                                 <input
@@ -276,58 +214,41 @@ function BlockGroupEditor({ div, state, dispatch }) {
                                   onChange={() =>
                                     toggleSubject(group.id, subject)
                                   }
+                                  style={{ cursor: "pointer" }}
                                 />
-                                {subject}
-                              </label>
-                              {isChecked && (
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={10}
-                                  value={entry.frequency}
-                                  onChange={(e) =>
-                                    updateFrequency(
-                                      group.id,
-                                      subject,
-                                      parseInt(e.target.value) || 0
-                                    )
-                                  }
-                                  title={`${subject}: times per week`}
-                                  style={{
-                                    width: 48,
-                                    padding: "2px 6px",
-                                    border: "1px solid var(--border)",
-                                    borderRadius: 4,
-                                    fontSize: "0.8rem",
-                                    textAlign: "center",
-                                  }}
-                                />
-                              )}
-                            </div>
+                                {isChecked && (
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={10}
+                                    value={entry.frequency}
+                                    onChange={(e) =>
+                                      updateFrequency(
+                                        group.id,
+                                        subject,
+                                        parseInt(e.target.value) || 0
+                                      )
+                                    }
+                                    title={`${subject}: times/week`}
+                                    style={{
+                                      width: 40,
+                                      padding: "1px 3px",
+                                      border: "1px solid var(--border)",
+                                      borderRadius: 3,
+                                      fontSize: "0.75rem",
+                                      textAlign: "center",
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </td>
                           );
                         })}
-                      </div>
-                    )}
-
-                    {/* Slot count total */}
-                    {group.subjects.length > 0 && (
-                      <div
-                        style={{
-                          marginTop: 10,
-                          paddingTop: 8,
-                          borderTop: "1px solid var(--border)",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-                          Total slots:
-                        </span>
-                        <span
+                        <td
                           style={{
-                            fontSize: "0.85rem",
+                            textAlign: "center",
                             fontWeight: 700,
+                            fontSize: "0.82rem",
                             color: isValid
                               ? "var(--success)"
                               : isOver
@@ -335,47 +256,31 @@ function BlockGroupEditor({ div, state, dispatch }) {
                               : "var(--warning)",
                           }}
                         >
-                          {total} / {target}
+                          {total}/{target}
                           {isValid ? " ✓" : ""}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Generated section IDs */}
-                    {group.subjects.length > 0 && (
-                      <div
-                        style={{
-                          marginTop: 8,
-                          paddingTop: 8,
-                          borderTop: "1px solid var(--border)",
-                          fontSize: "0.75rem",
-                          color: "var(--text-secondary)",
-                        }}
-                      >
-                        Sections:{" "}
-                        {group.subjects.map((e) => (
-                          <span
-                            key={e.subject}
-                            style={{
-                              display: "inline-block",
-                              background: "#F3F4F6",
-                              border: "1px solid var(--border)",
-                              borderRadius: 4,
-                              padding: "1px 5px",
-                              marginRight: 3,
-                              marginBottom: 2,
-                              fontFamily: "monospace",
-                              fontSize: "0.72rem",
-                            }}
+                        </td>
+                        <td>
+                          <button
+                            className="btn-icon"
+                            title="Remove block group"
+                            onClick={() =>
+                              dispatch({
+                                type: "REMOVE_BLOCK_GROUP",
+                                payload: {
+                                  divisionId: div.id,
+                                  groupId: group.id,
+                                },
+                              })
+                            }
                           >
-                            {grade}-{group.name}-{e.subject}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                            ✕
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         );
