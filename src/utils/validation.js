@@ -18,7 +18,7 @@ export function validateConfig(state) {
     const divName = div ? div.name : divId;
     for (const subject of subjects) {
       const hasTeacher = state.teachers.some(
-        (t) => t.subject === subject && t.division === divId
+        (t) => t.subject === subject && t.divisions.includes(divId)
       );
       if (!hasTeacher) {
         warnings.push({
@@ -160,7 +160,7 @@ export function exportToJSON(state) {
       id: t.id,
       name: t.name,
       subject: t.subject,
-      division: t.division,
+      divisions: t.divisions,
       section_ids: t.sectionIds,
     })),
     subject_requirements: state.subjectRequirements.map((r) => {
@@ -223,7 +223,8 @@ export function importFromJSON(json) {
       id: t.id,
       name: t.name,
       subject: t.subject,
-      division: t.division,
+      // Support both legacy single division and new array format
+      divisions: t.divisions || (t.division ? [t.division] : []),
       sectionIds: t.section_ids || [],
     })),
     subjectRequirements: (json.subject_requirements || []).map((r) => ({

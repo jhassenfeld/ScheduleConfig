@@ -17,7 +17,23 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
     if (!name || !form.subject) return;
 
     const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    if (state.teachers.some((t) => t.id === id)) return;
+
+    // If teacher already exists, add this division to their divisions list
+    const existingIndex = state.teachers.findIndex((t) => t.id === id);
+    if (existingIndex >= 0) {
+      const existing = state.teachers[existingIndex];
+      if (!existing.divisions.includes(divId)) {
+        dispatch({
+          type: "UPDATE_TEACHER",
+          payload: {
+            index: existingIndex,
+            teacher: { ...existing, divisions: [...existing.divisions, divId] },
+          },
+        });
+      }
+      updateForm(divId, { name: "", subject: "" });
+      return;
+    }
 
     dispatch({
       type: "ADD_TEACHER",
@@ -25,7 +41,7 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
         id,
         name,
         subject: form.subject,
-        division: divId,
+        divisions: [divId],
         sectionIds: [],
       },
     });
@@ -43,6 +59,49 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
     });
   };
 
+  const toggleDivision = (teacherIndex, divId) => {
+    const teacher = state.teachers[teacherIndex];
+    const divisions = teacher.divisions.includes(divId)
+      ? teacher.divisions.filter((d) => d !== divId)
+      : [...teacher.divisions, divId];
+    if (divisions.length === 0) return; // Must belong to at least one
+    // When removing a division, also remove sections from that division
+    const removedDivSections = !divisions.includes(divId)
+      ? state.sections.filter((s) => s.division === divId).map((s) => s.id)
+      : [];
+    const sectionIds = removedDivSections.length > 0
+      ? teacher.sectionIds.filter((id) => !removedDivSections.includes(id))
+      : teacher.sectionIds;
+    dispatch({
+      type: "UPDATE_TEACHER",
+      payload: { index: teacherIndex, teacher: { ...teacher, divisions, sectionIds } },
+    });
+  };
+
+  const removeTeacher = (teacherIndex, divId) => {
+    const teacher = state.teachers[teacherIndex];
+    if (teacher.divisions.length <= 1) {
+      // Last division — remove teacher entirely
+      dispatch({ type: "REMOVE_TEACHER", payload: teacherIndex });
+    } else {
+      // Remove from this division only
+      const divSectionIds = state.sections
+        .filter((s) => s.division === divId)
+        .map((s) => s.id);
+      dispatch({
+        type: "UPDATE_TEACHER",
+        payload: {
+          index: teacherIndex,
+          teacher: {
+            ...teacher,
+            divisions: teacher.divisions.filter((d) => d !== divId),
+            sectionIds: teacher.sectionIds.filter((id) => !divSectionIds.includes(id)),
+          },
+        },
+      });
+    }
+  };
+
   if (visibleDivisions.length === 0) {
     return (
       <div className="tab-content">
@@ -58,7 +117,8 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
     <div className="tab-content">
       <h2>Teachers</h2>
       <p className="tab-intro">
-        Add teachers, assign them a subject, and select which sections they teach.
+        Add teachers, assign them a subject, and select which sections they
+        teach. Teachers can belong to multiple divisions.
       </p>
 
       {visibleDivisions.map((div) => {
@@ -66,7 +126,7 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
         const divSubjects = state.subjects[div.id] || [];
         const divTeachers = state.teachers
           .map((t, i) => ({ ...t, _index: i }))
-          .filter((t) => t.division === div.id);
+          .filter((t) => t.divisions.includes(div.id));
         const divSections = state.sections.filter((s) => s.division === div.id);
 
         return (
@@ -120,6 +180,7 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
                   <tr>
                     <th>Name</th>
                     <th>Subject</th>
+                    <th>Divisions</th>
                     <th>Sections</th>
                     <th style={{ width: 60 }}></th>
                   </tr>
@@ -127,11 +188,23 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
                 <tbody>
                   {divTeachers.map((teacher) => {
                     const isExpanded = expanded[teacher.id];
-                    // For subject-based divisions, only show sections matching teacher's subject
-                    const relevantSections =
-                      div.sectionModel === "subject-based"
-                        ? divSections.filter((s) => s.subject === teacher.subject)
-                        : divSections;
+                    // Get sections from ALL of this teacher's divisions
+                    const allTeacherSections = state.sections.filter(
+                      (s) => teacher.divisions.includes(s.division)
+                    );
+                    // For subject-based divisions, filter to matching subject
+                    const relevantSections = allTeacherSections.filter((s) => {
+                      const sDiv = state.divisions.find((d) => d.id === s.division);
+                      if (sDiv && sDiv.sectionModel === "subject-based") {
+                        return s.subject === teacher.subject;
+                      }
+                      return true;
+                    });
+
+                    const divNames = teacher.divisions.map((dId) => {
+                      const d = state.divisions.find((x) => x.id === dId);
+                      return d ? d.name : dId;
+                    });
 
                     return [
                       <tr
@@ -140,6 +213,15 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
                       >
                         <td style={{ fontWeight: 600 }}>{teacher.name}</td>
                         <td>{teacher.subject}</td>
+                        <td>
+                          <div className="tag-list">
+                            {divNames.map((name) => (
+                              <span key={name} className="tag" style={{ fontSize: "0.72rem" }}>
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
                         <td>
                           <span
                             className="expand-toggle"
@@ -156,21 +238,68 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
                         <td>
                           <button
                             className="btn-icon"
-                            onClick={() =>
-                              dispatch({
-                                type: "REMOVE_TEACHER",
-                                payload: teacher._index,
-                              })
+                            onClick={() => removeTeacher(teacher._index, div.id)}
+                            title={
+                              teacher.divisions.length > 1
+                                ? `Remove from ${div.name}`
+                                : "Delete teacher"
                             }
-                            title="Delete teacher"
                           >
-                            x
+                            ✕
                           </button>
                         </td>
                       </tr>,
                       isExpanded && (
-                        <tr key={`${teacher.id}-sections`}>
-                          <td colSpan={4} className="teacher-sections-detail">
+                        <tr key={`${teacher.id}-detail`}>
+                          <td colSpan={5} className="teacher-sections-detail">
+                            {/* Division membership */}
+                            {state.divisions.length > 1 && (
+                              <div style={{ marginBottom: 10 }}>
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    color: "var(--text-secondary)",
+                                    marginBottom: 4,
+                                  }}
+                                >
+                                  Divisions:
+                                </div>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                  {state.divisions.map((d) => (
+                                    <label
+                                      key={d.id}
+                                      style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 4,
+                                        fontSize: "0.8rem",
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={teacher.divisions.includes(d.id)}
+                                        onChange={() => toggleDivision(teacher._index, d.id)}
+                                      />
+                                      {d.name}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Section assignment */}
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                color: "var(--text-secondary)",
+                                marginBottom: 4,
+                              }}
+                            >
+                              Sections:
+                            </div>
                             {relevantSections.length === 0 ? (
                               <span style={{ color: "var(--text-secondary)", fontSize: "0.8rem" }}>
                                 No sections available. Create sections first.
@@ -187,6 +316,17 @@ export default function Teachers({ state, dispatch, visibleDivisions }) {
                                       }
                                     />
                                     {section.id}
+                                    {teacher.divisions.length > 1 && (
+                                      <span
+                                        style={{
+                                          fontSize: "0.7rem",
+                                          color: "var(--text-secondary)",
+                                          marginLeft: 4,
+                                        }}
+                                      >
+                                        ({state.divisions.find((d) => d.id === section.division)?.name})
+                                      </span>
+                                    )}
                                   </label>
                                 ))}
                               </div>

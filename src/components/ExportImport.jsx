@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { validateConfig, exportToJSON, importFromJSON } from "../utils/validation";
+import BulkImport from "./BulkImport";
 
 export default function ExportImport({ state, dispatch }) {
   const fileInputRef = useRef(null);
@@ -91,7 +92,7 @@ export default function ExportImport({ state, dispatch }) {
                   (s) => s.division === div.id
                 );
                 const divTeachers = state.teachers.filter(
-                  (t) => t.division === div.id
+                  (t) => t.divisions.includes(div.id)
                 );
                 const divSubjects = state.subjects[div.id] || [];
                 const sched = state.masterSchedule[div.id];
@@ -148,6 +149,9 @@ export default function ExportImport({ state, dispatch }) {
           style={{ display: "none" }}
         />
       </div>
+
+      {/* Bulk Import */}
+      <BulkImport state={state} dispatch={dispatch} />
     </div>
   );
 }

@@ -95,7 +95,9 @@ function reducer(state, action) {
           s.division === oldDiv.id ? { ...s, division: division.id } : s
         );
         newTeachers = state.teachers.map((t) =>
-          t.division === oldDiv.id ? { ...t, division: division.id } : t
+          t.divisions.includes(oldDiv.id)
+            ? { ...t, divisions: t.divisions.map((d) => (d === oldDiv.id ? division.id : d)) }
+            : t
         );
         newReqs = state.subjectRequirements.map((r) =>
           r.division === oldDiv.id ? { ...r, division: division.id } : r
@@ -128,7 +130,9 @@ function reducer(state, action) {
         blockGroups: newBlockGroups,
         masterSchedule: newSchedule,
         sections: state.sections.filter((s) => s.division !== divId),
-        teachers: state.teachers.filter((t) => t.division !== divId),
+        teachers: state.teachers
+          .map((t) => ({ ...t, divisions: t.divisions.filter((d) => d !== divId) }))
+          .filter((t) => t.divisions.length > 0),
         subjectRequirements: state.subjectRequirements.filter((r) => r.division !== divId),
         activeDivision:
           state.activeDivision === divId ? "all" : state.activeDivision,
@@ -169,7 +173,7 @@ function reducer(state, action) {
           (s) => !(s.division === divisionId && s.subject === subject)
         ),
         teachers: state.teachers.filter(
-          (t) => !(t.division === divisionId && t.subject === subject)
+          (t) => !(t.divisions.includes(divisionId) && t.subject === subject)
         ),
         subjectRequirements: state.subjectRequirements.filter(
           (r) => !(r.division === divisionId && r.subject === subject)
