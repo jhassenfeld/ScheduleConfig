@@ -1,4 +1,4 @@
-import { useReducer } from "react";
+import { useReducer, useEffect } from "react";
 import SchoolInfo from "./components/SchoolInfo";
 import Sections from "./components/Sections";
 import Subjects from "./components/Subjects";
@@ -18,7 +18,9 @@ const VIEW_TABS = [
   { id: "export", label: "Export / Import" },
 ];
 
-const initialState = {
+const STORAGE_KEY = "scheduleConfigState";
+
+const defaultState = {
   schoolName: "",
   divisions: [],
   subjects: {},
@@ -32,6 +34,19 @@ const initialState = {
   activeDivision: "all",
   activeTab: "school-info",
 };
+
+function loadSavedState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...defaultState, ...parsed };
+    }
+  } catch (e) {
+    console.warn("Failed to load saved state:", e);
+  }
+  return defaultState;
+}
 
 function reducer(state, action) {
   switch (action.type) {
@@ -281,7 +296,18 @@ function reducer(state, action) {
 }
 
 export default function App() {
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [state, dispatch] = useReducer(reducer, null, loadSavedState);
+
+  // Auto-save to localStorage on every state change
+  useEffect(() => {
+    try {
+      // Don't persist UI-only state (activeTab, activeDivision)
+      const { activeTab, activeDivision, ...dataState } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataState));
+    } catch (e) {
+      console.warn("Failed to save state:", e);
+    }
+  }, [state]);
 
   const visibleDivisions =
     state.activeDivision === "all"
