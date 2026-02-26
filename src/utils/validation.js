@@ -86,6 +86,51 @@ export function validateConfig(state) {
     }
   }
 
+  // Check block budget: assigned frequencies vs teachable slots
+  const TEACHABLE_TYPES = new Set(["academic", "class"]);
+  for (const div of state.divisions) {
+    const sched = state.masterSchedule[div.id];
+    if (!sched || !sched.default || sched.default.length === 0) continue;
+    const defaultAcademic = sched.default.filter(
+      (b) => TEACHABLE_TYPES.has(b.type)
+    ).length;
+    const fridayAcademic = sched.friday
+      ? sched.friday.filter((b) => TEACHABLE_TYPES.has(b.type)).length
+      : defaultAcademic;
+    // Subtract day overrides that target teachable blocks
+    const overrides = sched.dayOverrides || [];
+    const academicBlockNums = new Set(
+      sched.default.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block)
+    );
+    const fridayAcademicBlockNums = sched.friday
+      ? new Set(sched.friday.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block))
+      : academicBlockNums;
+    const overrideReductions = overrides.filter((o) => {
+      if (o.day === "fri") return fridayAcademicBlockNums.has(o.block);
+      return academicBlockNums.has(o.block);
+    }).length;
+    const totalTeachable = defaultAcademic * 4 + fridayAcademic - overrideReductions;
+
+    for (const grade of div.grades) {
+      const assigned = state.subjectRequirements
+        .filter((r) => r.division === div.id && r.grades.includes(grade))
+        .reduce((sum, r) => sum + (r.blocksPerWeek || 0), 0);
+      if (assigned > 0 && assigned > totalTeachable) {
+        warnings.push({
+          type: "error",
+          tab: "Schedule",
+          message: `Grade ${grade.toUpperCase()} in "${div.name}" has ${assigned} blocks assigned but only ${totalTeachable} teachable slots/week (${assigned - totalTeachable} over)`,
+        });
+      } else if (assigned > 0 && assigned < totalTeachable) {
+        warnings.push({
+          type: "info",
+          tab: "Schedule",
+          message: `Grade ${grade.toUpperCase()} in "${div.name}" has ${totalTeachable - assigned} unassigned teachable slots/week (${assigned}/${totalTeachable})`,
+        });
+      }
+    }
+  }
+
   // Check block group slot totals (subject-based divisions)
   for (const div of state.divisions) {
     if (div.sectionModel !== "subject-based") continue;
@@ -151,6 +196,11 @@ export function exportToJSON(state) {
         {
           default: sched.default || [],
           friday: sched.friday || null,
+          day_overrides: (sched.dayOverrides || []).map((o) => ({
+            day: o.day,
+            block: o.block,
+            type: o.type,
+          })),
         },
       ])
     ),
@@ -215,6 +265,11 @@ export function importFromJSON(json) {
         {
           default: sched.default || [],
           friday: sched.friday || null,
+          dayOverrides: (sched.day_overrides || []).map((o) => ({
+            day: o.day,
+            block: o.block,
+            type: o.type,
+          })),
         },
       ])
     ),

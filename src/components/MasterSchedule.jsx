@@ -1,10 +1,14 @@
 import { useState } from "react";
 
+const DAYS = ["mon", "tue", "wed", "thu", "fri"];
+const DAY_LABELS = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday" };
+
 export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
   const [fridayEnabled, setFridayEnabled] = useState({});
+  const [newOverride, setNewOverride] = useState({});
 
   const getSchedule = (divId) =>
-    state.masterSchedule[divId] || { default: [], friday: null };
+    state.masterSchedule[divId] || { default: [], friday: null, dayOverrides: [] };
 
   const setBlockCount = (divId, count, key = "default") => {
     const sched = getSchedule(divId);
@@ -73,6 +77,147 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
     }
   };
 
+  const addDayOverride = (divId, day, block, type) => {
+    const sched = getSchedule(divId);
+    const existing = sched.dayOverrides || [];
+    if (existing.some((o) => o.day === day && o.block === block)) return;
+    dispatch({
+      type: "SET_SCHEDULE",
+      payload: {
+        divisionId: divId,
+        schedule: {
+          ...sched,
+          dayOverrides: [...existing, { day, block: parseInt(block), type }],
+        },
+      },
+    });
+  };
+
+  const removeDayOverride = (divId, day, block) => {
+    const sched = getSchedule(divId);
+    dispatch({
+      type: "SET_SCHEDULE",
+      payload: {
+        divisionId: divId,
+        schedule: {
+          ...sched,
+          dayOverrides: (sched.dayOverrides || []).filter(
+            (o) => !(o.day === day && o.block === block)
+          ),
+        },
+      },
+    });
+  };
+
+  const TEACHABLE_TYPES = new Set(["academic", "class"]);
+
+  const renderBlockBudget = (div) => {
+    const sched = getSchedule(div.id);
+    const defaultBlocks = sched.default || [];
+    const fridayBlocks = sched.friday;
+
+    if (defaultBlocks.length === 0 || div.grades.length === 0) return null;
+
+    // Count teachable (academic) blocks per day
+    const defaultAcademic = defaultBlocks.filter(
+      (b) => TEACHABLE_TYPES.has(b.type)
+    ).length;
+    const fridayAcademic = fridayBlocks
+      ? fridayBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).length
+      : defaultAcademic;
+
+    // Subtract day overrides that target teachable blocks
+    const overrides = sched.dayOverrides || [];
+    const academicBlockNums = new Set(
+      defaultBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block)
+    );
+    const fridayAcademicBlockNums = fridayBlocks
+      ? new Set(fridayBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block))
+      : academicBlockNums;
+    const overrideReductions = overrides.filter((o) => {
+      if (o.day === "fri") return fridayAcademicBlockNums.has(o.block);
+      return academicBlockNums.has(o.block);
+    }).length;
+    const totalTeachable = defaultAcademic * 4 + fridayAcademic - overrideReductions;
+
+    const divSubjects = state.subjects[div.id] || [];
+    if (divSubjects.length === 0) return null;
+
+    const rows = div.grades.map((grade) => {
+      const isHalfBlock = (div.halfBlockGrades || []).includes(grade);
+      // Sum full-block frequencies for subjects that apply to this grade
+      const assigned = state.subjectRequirements
+        .filter((r) => r.division === div.id && r.grades.includes(grade))
+        .reduce((sum, r) => sum + (r.blocksPerWeek || 0), 0);
+      const diff = totalTeachable - assigned;
+
+      return { grade, isHalfBlock, assigned, diff };
+    });
+
+    // Don't render if nothing is assigned yet
+    const anyAssigned = rows.some((r) => r.assigned > 0);
+    if (!anyAssigned) return null;
+
+    return (
+      <div style={{ marginTop: 20 }}>
+        <h4 style={{ fontSize: "0.85rem", marginBottom: 8, color: "var(--text-secondary)" }}>
+          Block Budget
+        </h4>
+        <table className="config-table" style={{ maxWidth: 460 }}>
+          <thead>
+            <tr>
+              <th style={{ width: 70 }}>Grade</th>
+              <th style={{ width: 120 }}>Teachable / wk</th>
+              <th style={{ width: 120 }}>Assigned / wk</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ grade, isHalfBlock, assigned, diff }) => (
+              <tr key={grade}>
+                <td style={{ fontWeight: 600 }}>
+                  {grade.toUpperCase()}
+                  {isHalfBlock ? " *" : ""}
+                </td>
+                <td>{totalTeachable}</td>
+                <td>{assigned}</td>
+                <td
+                  style={{
+                    color:
+                      diff === 0
+                        ? "#059669"
+                        : diff > 0
+                        ? "#D97706"
+                        : "#DC2626",
+                    fontWeight: 600,
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  {diff === 0
+                    ? "\u2713 Balanced"
+                    : diff > 0
+                    ? `${diff} open`
+                    : `${Math.abs(diff)} over`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {div.halfBlockGrades?.length > 0 && (
+          <p
+            style={{
+              fontSize: "0.72rem",
+              color: "var(--text-secondary)",
+              marginTop: 4,
+            }}
+          >
+            * Half-block grade — budget shown is for full blocks only.
+          </p>
+        )}
+      </div>
+    );
+  };
+
   if (visibleDivisions.length === 0) {
     return (
       <div className="tab-content">
@@ -133,10 +278,12 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                 onChange={(e) => updateBlock(divId, i, "type", e.target.value, key)}
               >
                 <option value="academic">Academic</option>
+                <option value="class">Class</option>
                 <option value="lunch">Lunch</option>
                 <option value="recess">Recess</option>
                 <option value="tefillot">Tefillot</option>
                 <option value="assembly">Assembly</option>
+                <option value="advisory">Advisory</option>
                 <option value="break">Break</option>
               </select>
             </td>
@@ -300,6 +447,131 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                 )}
               </div>
             )}
+
+            {renderBlockBudget(div)}
+
+            {/* Day-Specific Overrides */}
+            {defaultBlocks.length > 0 && (() => {
+              const overrides = sched.dayOverrides || [];
+              const overrideForm = newOverride[div.id] || { day: "", block: "", type: "advisory" };
+              const selectedDay = overrideForm.day;
+              const dayBlocks = selectedDay === "fri" && fridayBlocks ? fridayBlocks : defaultBlocks;
+              const availableBlocks = dayBlocks.filter(
+                (b) =>
+                  TEACHABLE_TYPES.has(b.type) &&
+                  !overrides.some((o) => o.day === selectedDay && o.block === b.block)
+              );
+
+              return (
+                <div style={{ marginTop: 20 }}>
+                  <h4 style={{ fontSize: "0.85rem", marginBottom: 4, color: "var(--text-secondary)" }}>
+                    Day-Specific Overrides
+                  </h4>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: 8 }}>
+                    Make a normally academic block non-academic on a specific day (e.g., Tuesday Block 2 → Advisory).
+                  </p>
+
+                  {overrides.length > 0 && (
+                    <table className="config-table" style={{ maxWidth: 500, marginBottom: 12 }}>
+                      <thead>
+                        <tr>
+                          <th>Day</th>
+                          <th>Block</th>
+                          <th>Type</th>
+                          <th style={{ width: 70 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overrides.map((o, i) => (
+                          <tr key={i}>
+                            <td>{DAY_LABELS[o.day] || o.day}</td>
+                            <td>Block {o.block}</td>
+                            <td style={{ textTransform: "capitalize" }}>{o.type}</td>
+                            <td>
+                              <button
+                                className="btn btn-danger btn-sm"
+                                onClick={() => removeDayOverride(div.id, o.day, o.block)}
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div className="form-row" style={{ gap: 8, alignItems: "center" }}>
+                    <select
+                      className="form-select"
+                      value={overrideForm.day}
+                      onChange={(e) =>
+                        setNewOverride({
+                          ...newOverride,
+                          [div.id]: { ...overrideForm, day: e.target.value, block: "" },
+                        })
+                      }
+                      style={{ width: 130, fontSize: "0.8rem" }}
+                    >
+                      <option value="">Day...</option>
+                      {DAYS.map((d) => (
+                        <option key={d} value={d}>
+                          {DAY_LABELS[d]}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="form-select"
+                      value={overrideForm.block}
+                      onChange={(e) =>
+                        setNewOverride({
+                          ...newOverride,
+                          [div.id]: { ...overrideForm, block: e.target.value },
+                        })
+                      }
+                      style={{ width: 170, fontSize: "0.8rem" }}
+                      disabled={!selectedDay}
+                    >
+                      <option value="">Block...</option>
+                      {availableBlocks.map((b) => (
+                        <option key={b.block} value={b.block}>
+                          Block {b.block} — {b.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="form-select"
+                      value={overrideForm.type}
+                      onChange={(e) =>
+                        setNewOverride({
+                          ...newOverride,
+                          [div.id]: { ...overrideForm, type: e.target.value },
+                        })
+                      }
+                      style={{ width: 130, fontSize: "0.8rem" }}
+                    >
+                      <option value="advisory">Advisory</option>
+                      <option value="assembly">Assembly</option>
+                      <option value="tefillot">Tefillot</option>
+                      <option value="recess">Recess</option>
+                      <option value="break">Break</option>
+                      <option value="lunch">Lunch</option>
+                      <option value="fixed">Fixed</option>
+                    </select>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      disabled={!overrideForm.day || !overrideForm.block}
+                      onClick={() => {
+                        addDayOverride(div.id, overrideForm.day, overrideForm.block, overrideForm.type || "advisory");
+                        setNewOverride({ ...newOverride, [div.id]: { day: "", block: "", type: "advisory" } });
+                      }}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         );
       })}
