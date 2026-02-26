@@ -462,6 +462,26 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                   !overrides.some((o) => o.day === selectedDay && o.block === b.block)
               );
 
+              // Compute teachable block count with override deductions
+              const defaultAcademic = defaultBlocks.filter(
+                (b) => TEACHABLE_TYPES.has(b.type)
+              ).length;
+              const fridayAcademic = fridayBlocks
+                ? fridayBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).length
+                : defaultAcademic;
+              const academicBlockNums = new Set(
+                defaultBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block)
+              );
+              const fridayAcademicBlockNums = fridayBlocks
+                ? new Set(fridayBlocks.filter((b) => TEACHABLE_TYPES.has(b.type)).map((b) => b.block))
+                : academicBlockNums;
+              const overrideReductions = overrides.filter((o) => {
+                if (o.day === "fri") return fridayAcademicBlockNums.has(o.block);
+                return academicBlockNums.has(o.block);
+              }).length;
+              const baseTeachable = defaultAcademic * 4 + fridayAcademic;
+              const netTeachable = baseTeachable - overrideReductions;
+
               return (
                 <div style={{ marginTop: 20 }}>
                   <h4 style={{ fontSize: "0.85rem", marginBottom: 4, color: "var(--text-secondary)" }}>
@@ -470,6 +490,27 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                   <p style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: 8 }}>
                     Make a normally academic block non-academic on a specific day (e.g., Tuesday Block 2 → Advisory).
                   </p>
+
+                  <div style={{
+                    fontSize: "0.8rem",
+                    padding: "6px 10px",
+                    background: "var(--bg-secondary, #f5f5f5)",
+                    borderRadius: 4,
+                    marginBottom: 12,
+                    display: "inline-block",
+                  }}>
+                    <strong>Teachable blocks / week:</strong>{" "}
+                    {overrideReductions > 0 ? (
+                      <span>
+                        <span style={{ fontWeight: 700 }}>{netTeachable}</span>
+                        <span style={{ color: "var(--text-secondary)", marginLeft: 4 }}>
+                          ({baseTeachable} base − {overrideReductions} override{overrideReductions !== 1 ? "s" : ""})
+                        </span>
+                      </span>
+                    ) : (
+                      <span style={{ fontWeight: 700 }}>{baseTeachable}</span>
+                    )}
+                  </div>
 
                   {overrides.length > 0 && (
                     <table className="config-table" style={{ maxWidth: 500, marginBottom: 12 }}>
@@ -535,7 +576,7 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                       <option value="">Block...</option>
                       {availableBlocks.map((b) => (
                         <option key={b.block} value={b.block}>
-                          Block {b.block} — {b.label}
+                          Block {b.block}
                         </option>
                       ))}
                     </select>
