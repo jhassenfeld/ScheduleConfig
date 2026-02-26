@@ -549,6 +549,21 @@ body {
   border-left: 3px solid #10B981;
 }
 
+.timeline-block.tefillot {
+  background: #EDE9FE;
+  border-left: 3px solid #8B5CF6;
+}
+
+.timeline-block.assembly {
+  background: #FEF3C7;
+  border-left: 3px solid #D97706;
+}
+
+.timeline-block.break {
+  background: #CFFAFE;
+  border-left: 3px solid #06B6D4;
+}
+
 .timeline-time {
   font-weight: 600;
   min-width: 100px;

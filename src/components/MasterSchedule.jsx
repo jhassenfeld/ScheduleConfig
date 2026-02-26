@@ -135,6 +135,9 @@ export default function MasterSchedule({ state, dispatch, visibleDivisions }) {
                 <option value="academic">Academic</option>
                 <option value="lunch">Lunch</option>
                 <option value="recess">Recess</option>
+                <option value="tefillot">Tefillot</option>
+                <option value="assembly">Assembly</option>
+                <option value="break">Break</option>
               </select>
             </td>
           </tr>
